@@ -1,5 +1,24 @@
 import socket
 import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class PrometheusRequestHandler(BaseHTTPRequestHandler):
+    data = None
+
+    def do_GET(self):
+        if self.path == '/metrics':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain; version=0.0.4')
+            self.end_headers()                        # Your metrics here in Prometheus exposition format            response_body = b"my_custom_metric 42"                        self.wfile.write(response_body)        else:
+            self.wfile.write(self.data)
+
+def run_server(senddata):
+    server_address = ('localhost', 8000)
+    httpd = HTTPServer(server_address, PrometheusRequestHandler)
+    PrometheusRequestHandler.data = senddata
+    print('Starting server...')
+    httpd.serve_forever()
+
 
 print("syslog-ng prometheus exporter")
 
@@ -29,6 +48,7 @@ try:
             break
         response += chunk
     print("Received:", response.decode())
+    run_server(response)
 
 finally:
     print('closing socket')
