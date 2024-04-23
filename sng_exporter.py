@@ -2,54 +2,65 @@ import socket
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+# TODO socket path, server port, 'STATS PROMETHEUS WITH_LEGACY\n' paraméterezhetően
+
+
 class PrometheusRequestHandler(BaseHTTPRequestHandler):
     data = None
+
+    def handle(self):
+        # print("Run before request")
+        self.data = fetch_syslog_stats()
+        BaseHTTPRequestHandler.handle(self)
 
     def do_GET(self):
         if self.path == '/metrics':
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; version=0.0.4')
-            self.end_headers()                        # Your metrics here in Prometheus exposition format            response_body = b"my_custom_metric 42"                        self.wfile.write(response_body)        else:
+            self.end_headers()
             self.wfile.write(self.data)
 
-def run_server(senddata):
+
+def run_server():
     server_address = ('localhost', 8000)
     httpd = HTTPServer(server_address, PrometheusRequestHandler)
-    PrometheusRequestHandler.data = senddata
     print('Starting server...')
     httpd.serve_forever()
 
 
-print("syslog-ng prometheus exporter")
+def fetch_syslog_stats():
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    socket_path = '/var/lib/syslog-ng/syslog-ng.ctl'
+    print("Fetching syslog-ng stats")
+    try:
+        sock.connect(socket_path)
+        # print(f"Successfully connected to {socket}")
+    except socket.error:
+        print(socket.error)
+        sys.exit(1)
+    try:
+        message = 'STATS PROMETHEUS WITH_LEGACY\n'
+        sock.send(message.encode())
 
-# Create a UDS socket
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        response = b''
+        while True:
+            chunk = sock.recv(1024)
+            # breakpoint()
+            response += chunk
+            if not chunk or b'.\n' in chunk:
+                break
+
+        print("Received:", response.decode())
+        return response
+
+    finally:
+        print('closing socket')
+        sock.close()
 
 
-socket_path = '/var/lib/syslog-ng/syslog-ng.ctl'
-print(sys.stderr, 'connecting to %s' % socket_path)
-try:
-    sock.connect(socket_path)
-    print(f"Successfully connected to {socket}")
-except socket.error:
-    print(socket.error)
-    sys.exit(1)
+def main():
+    run_server()
 
-try:
-    # Send data
-    message = 'STATS PROMETHEUS WITH_LEGACY\n'
-    sock.send(message.encode())
 
-    # Receive data
-    response = b''
-    while True:
-        chunk = sock.recv(1024)
-        if not chunk or b'.\n' in chunk:
-            break
-        response += chunk
-    print("Received:", response.decode())
-    run_server(response)
-
-finally:
-    print('closing socket')
-    sock.close()
+if __name__ == "__main__":
+    main()
