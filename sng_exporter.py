@@ -51,7 +51,7 @@ def fetch_syslog_stats():
                 break
 
         print("Received:", response.decode())
-        return response
+        return response.decode().strip()[:-1].encode()
 
     finally:
         print('closing socket')
