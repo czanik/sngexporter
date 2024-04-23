@@ -4,7 +4,6 @@ import socket
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-
 class PrometheusRequestHandler(BaseHTTPRequestHandler):
     socket_path = None
     stats_with_legacy = None
@@ -23,7 +22,7 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
 
     def fetch_syslog_stats(self, socket_path, stats_with_legacy):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        print("Fetching syslog-ng stats")
+        logging.info("Fetching syslog-ng stats")
         try:
             sock.connect(socket_path)
         except socket.error as e:
@@ -40,11 +39,11 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
                 if not chunk or b'.\n' in chunk:
                     break
 
-            print("Received:", response.decode())
+            logging.info("Received:", response.decode())
             return response.decode().strip()[:-1].encode()
 
         finally:
-            print('closing socket')
+            logging.info('closing socket')
             sock.close()
 
 
@@ -52,15 +51,12 @@ class HttpServer:
     def __init__(self, listen_address, socket_path, stats_type):
         PrometheusRequestHandler.socket_path = socket_path
         PrometheusRequestHandler.stats_with_legacy = stats_type
-        server = HTTPServer((listen_address.split(":")[0], int(listen_address.split(":")[1])), PrometheusRequestHandler)
-        server.serve_forever()
-
-
-def run_server(port: int, socket_path, stats_type):
-    server_address = ('localhost', port)
-    httpd = HTTPServer(server_address, PrometheusRequestHandler())
-    print('Starting server...')
-    httpd.serve_forever()
+        self.server = HTTPServer((listen_address.split(":")[0], int(listen_address.split(":")[1])), PrometheusRequestHandler)
+        try:
+            self.server.serve_forever()
+        except KeyboardInterrupt:
+            print('Server stopped.')
+            self.server.close()
 
 
 def main():
@@ -76,10 +72,9 @@ def main():
     if args.stats_with_legacy:
         stats = 'STATS PROMETHEUS WITH_LEGACY\n'
 
-    print("Socket Path:", args.socket_path)
-    print("Listen address:", args.listen_address)
-    print("Stats with Legacy:", stats)
-
+    logging.info("Socket Path:", args.socket_path)
+    logging.info("Listen address:", args.listen_address)
+    logging.info("Stats with Legacy:", stats)
     server = HttpServer(args.listen_address, args.socket_path, stats)
 
 
