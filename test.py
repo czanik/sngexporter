@@ -7,6 +7,8 @@ import multiprocessing
 import socket
 from time import sleep
 import requests
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import BytesIO as IO
 
 class TestPrometheusServer(unittest.TestCase):
 
@@ -20,6 +22,7 @@ class TestPrometheusServer(unittest.TestCase):
 
             r = requests.get('http://localhost:9577/metrics')
             self.assertEqual(r.status_code, 200)
+            self.assertIsNotNone(r.content)
             self.assertNotEqual(r.content[-1], '.')
             server_proc.terminate()  # sends a SIGTERMimport socket
 
@@ -38,7 +41,21 @@ class TestPrometheusServer(unittest.TestCase):
             print(fake_client)
             server_proc.terminate()  # sends a SIGTERMimport socket
 
+    def test_mock_server(self):
+        """Test the custom HTTP request handler by mocking a server"""
+        class MockRequest(object):
+            def makefile(self, *args, **kwargs):
+                return IO(b"GET /")
 
+        class MockServer(object):
+            def __init__(self, ip_port, Handler):
+                handler = Handler(MockRequest(), ip_port, self)
+
+        # The GET request will be sent here
+        # and any exceptions will be propagated through.
+        PrometheusRequestHandler.socket_path = '/var/lib/syslog-ng/syslog-ng.ctl'
+        PrometheusRequestHandler.stats_with_legacy = 'STATS PROMETHEUS WITH_LEGACY\n'
+        server = MockServer(('0.0.0.0', 8888), PrometheusRequestHandler)
 
 if __name__ == '__main__':
     unittest.main()
