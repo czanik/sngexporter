@@ -22,7 +22,7 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(self.data)
 
     def fetch_syslog_stats(self, socket_path, stats_with_legacy):
-        logging.info("Fetching syslog-ng stats")
+        logging.debug("Fetching syslog-ng stats")
         sock = self.create_socket_connection(socket_path)
         try:
             message = stats_with_legacy
@@ -35,16 +35,17 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
                 if not chunk or b'.\n' in chunk:
                     break
 
-            logging.info(f"Received: {response.decode()}")
+            logging.debug(f"Received:\n{response.decode()}")
             return response.decode().strip()[:-1].encode()
 
         finally:
-            logging.info('closing socket')
+            logging.debug('closing socket')
             sock.close()
 
     @classmethod
     def create_socket_connection(cls, socket_path, check_only=False):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(30)
         try:
             sock.connect(socket_path)
         except socket.error as e:
@@ -53,6 +54,7 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
 
         if check_only:
             sock.close()
+            logging.debug("Successfully connected to syslog-ng-ctl socket")
             return
 
         return sock
@@ -66,30 +68,42 @@ class HttpServer:
                                  PrometheusRequestHandler)
         try:
             self.server.serve_forever()
+            logging.info("Service successfully started")
         except KeyboardInterrupt:
-            print('Server stopped.')
+            logging.info("Service stopped")
             self.server.server_close()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Command line script to export syslog-ng stats to Prometheus.")
-    parser.add_argument("--listen-address", dest="listen_address", help="Listen address", default=':9577')
+        description="Command line script to export syslog-ng stats to Prometheus.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--listen-address", dest="listen_address", help="Service listen address", default=":9577")
     parser.add_argument("--socket-path", dest="socket_path", help="Path to the syslog-ng-ctl socket",
                         default='/var/lib/syslog-ng/syslog-ng.ctl')
     parser.add_argument("--stats-with-legacy", dest="stats_with_legacy", action="store_true",
-                        help="Enable stats with legacy")
+                        help="Enable syslog-ng log processing statistics")
+    parser.add_argument("--log-level", dest="log_level", help="Only log messages with the given severity or above. "
+                                                              "One of: [debug, info, error]", default="info")
     args = parser.parse_args()
 
     stats = 'STATS PROMETHEUS\n'
     if args.stats_with_legacy:
         stats = 'STATS PROMETHEUS WITH_LEGACY\n'
 
-    logging.basicConfig(level=logging.INFO)
-    logging.info(f"Socket Path: {args.socket_path}")
-    logging.info(f"Listen address: {args.listen_address}")
-    logging.info(f"Stats with Legacy: {stats}")
+    numeric_level = getattr(logging, args.log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % args.log_level)
+    logging.basicConfig(level=numeric_level,
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S'
+                        )
+    logging.info("Starting Prometheus syslog-ng exporter...")
+    logging.debug(f"Socket Path: {args.socket_path}")
+    logging.debug(f"Listen address: {args.listen_address}")
+    logging.debug(f"Stats with Legacy: {stats}")
 
+    logging.debug("Checking syslog-ng-ctl socket")
     PrometheusRequestHandler.create_socket_connection(args.socket_path, check_only=True)
     server = HttpServer(args.listen_address, args.socket_path, stats)
 
