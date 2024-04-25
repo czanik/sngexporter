@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from io import BytesIO
 from http.client import HTTPConnection
-from sng_exporter import PrometheusRequestHandler, HttpServer, main
+from sng_exporter import PrometheusRequestHandler, SngExporterServer, main
 import multiprocessing
 import socket
 from time import sleep
