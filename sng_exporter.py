@@ -3,6 +3,27 @@ import logging
 import socket
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from logging.handlers import SysLogHandler
+
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(log_level, log_to_journal):
+    numeric_level = getattr(logging, log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % log_level)
+    logger.setLevel(numeric_level)
+
+    formatter = logging.Formatter('%(levelname)s - %(message)s')
+
+    if log_to_journal:
+        syslog_handler = SysLogHandler(address='/dev/log')
+        syslog_handler.setFormatter(formatter)
+        logger.addHandler(syslog_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
 
 class PrometheusRequestHandler(BaseHTTPRequestHandler):
@@ -22,7 +43,7 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(self.data)
 
     def fetch_syslog_stats(self, socket_path, stats_with_legacy):
-        logging.debug("Fetching syslog-ng stats")
+        logger.debug("Fetching syslog-ng stats")
         sock = self.create_socket_connection(socket_path)
         try:
             message = stats_with_legacy
@@ -35,11 +56,11 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
                 if not chunk or b'.\n' in chunk:
                     break
 
-            logging.debug(f"Received:\n{response.decode()}")
+            logger.debug(f"Received:\n{response.decode()}")
             return response.decode().strip()[:-1].encode()
 
         finally:
-            logging.debug('closing socket')
+            logger.debug('closing socket')
             sock.close()
 
     @classmethod
@@ -49,12 +70,12 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
         try:
             sock.connect(socket_path)
         except socket.error as e:
-            logging.error(f"Socket connection error: {e}: {socket_path}")
+            logger.error(f"Socket connection error: {e}: {socket_path}")
             sys.exit(1)
 
         if check_only:
             sock.close()
-            logging.debug("Successfully connected to syslog-ng-ctl socket")
+            logger.debug("Successfully connected to syslog-ng-ctl socket")
             return
 
         return sock
@@ -68,9 +89,9 @@ class HttpServer:
                                  PrometheusRequestHandler)
         try:
             self.server.serve_forever()
-            logging.info("Service successfully started")
+            logger.info("Service successfully started")
         except KeyboardInterrupt:
-            logging.info("Service stopped")
+            logger.info("Service stopped")
             self.server.server_close()
 
 
@@ -85,25 +106,20 @@ def main():
                         help="Enable syslog-ng log processing statistics")
     parser.add_argument("--log-level", dest="log_level", help="Only log messages with the given severity or above. "
                                                               "One of: [debug, info, error]", default="info")
+    parser.add_argument("--log-to-journal", dest="log_to_journal", action="store_true", help="Send logs to journal")
     args = parser.parse_args()
 
     stats = 'STATS PROMETHEUS\n'
     if args.stats_with_legacy:
         stats = 'STATS PROMETHEUS WITH_LEGACY\n'
 
-    numeric_level = getattr(logging, args.log_level.upper(), None)
-    if not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % args.log_level)
-    logging.basicConfig(level=numeric_level,
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S'
-                        )
-    logging.info("Starting Prometheus syslog-ng exporter...")
-    logging.debug(f"Socket Path: {args.socket_path}")
-    logging.debug(f"Listen address: {args.listen_address}")
-    logging.debug(f"Stats with Legacy: {stats}")
+    setup_logging(args.log_level, args.log_to_journal)
+    logger.info("Starting syslog-ng exporter...")
+    logger.debug(f"Socket Path: {args.socket_path}")
+    logger.debug(f"Listen address: {args.listen_address}")
+    logger.debug(f"Stats with Legacy: {stats}")
 
-    logging.debug("Checking syslog-ng-ctl socket")
+    logger.debug("Checking syslog-ng-ctl socket")
     PrometheusRequestHandler.create_socket_connection(args.socket_path, check_only=True)
     server = HttpServer(args.listen_address, args.socket_path, stats)
 
