@@ -137,6 +137,11 @@ syslogng_last_successful_config_reload_timestamp_seconds 1713794747
 syslogng_scratch_buffers_bytes 0
 .
 ```
+You can start sng_exporter.py with the following commandline:
+```
+python3 sng_exporter.py --listen-address=":9578" --socket-path=/mydata/libsng/syslog-ng.ctl --log-level=debug
+```
+Or using the systemd service file, once you edited the parameters.
 ### Exporter and syslog-ng in containers
 
 You can also run syslog-ng and the syslog-ng Prometheus exporter in containers. For testing I used the official syslog-ng container and the exporter container, as created above. You can use volumes to share a directory between the two containers. The following command creates a volume called ```myvolume```.
