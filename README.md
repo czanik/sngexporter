@@ -11,7 +11,9 @@ The syslog-ng Prometheus exporter is implemented in Python. It also uses the new
 Before you configure and start using the syslog-ng Prometheus exporter, make sure that the following prerequisites are met:
 
 - Python 3.x (tested with Python 3.6 and 3.11) with no external dependencies.
-- syslog-ng OSE 4.1 or later (tested with 4.7), or syslog-ng PE 7.0.32 or later (tested with 7.0.34).
+- syslog-ng OSE 4.1 or later (tested with 4.7), or syslog-ng PE 7.0.34 or later (tested with 7.0.34).
+
+**Note:** while Prometheus formatted statistics works in syslog-ng PE, it is not (yet) an officially supported feature.
 
 For Docker testing, we used the [official syslog-ng Docker image](https://hub.docker.com/r/balabit/syslog-ng/). Other images might use different path names for the syslog-ng control socket.
 
