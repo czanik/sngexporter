@@ -39,7 +39,19 @@ class PrometheusRequestHandler(BaseHTTPRequestHandler):
         BaseHTTPRequestHandler.handle(self)
 
     def do_GET(self):
-        if self.path == '/metrics':
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain; version=0.0.4')
+            self.end_headers()
+            self.wfile.write(b'SyslogNG Exporter')
+
+        elif self.path == '/ping':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain; version=0.0.4')
+            self.end_headers()
+            self.wfile.write(b'PONG')
+
+        elif self.path == '/metrics':
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; version=0.0.4')
             self.end_headers()
